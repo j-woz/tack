@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+THIS=$( cd $( dirname $0 ) ; /bin/pwd )
+TACK_HOME=$( cd ${THIS}/.. ; /bin/pwd )
+
+export PYTHONPATH=${TACK_HOME}/src
+python3 ${TACK_HOME}/src/main.py ${*}

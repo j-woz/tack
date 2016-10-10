@@ -1,0 +1,9 @@
+
+from tack.triggers import TriggerFactory
+
+tf = TriggerFactory(tack)
+
+def t1_f(clock):
+    print(clock)
+
+tf.new(name="timer1", type="timer", handler=t1_f, interval=1)
