@@ -3,7 +3,10 @@ from tack.Triggers import TriggerFactory
 
 tf = TriggerFactory(tack)
 
-def t1_f(clock):
-    print(clock)
+def t1_f(trigger, clock):
+    print("the time is: %0f" % clock)
+    import random
+    if random.randint(0,3) == 0:
+        trigger.request_shutdown()
 
 tf.new(name="timer1", type="timer", handler=t1_f, interval=1)

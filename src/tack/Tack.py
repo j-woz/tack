@@ -4,6 +4,7 @@
 # A context for a Tack instance
 
 import logging
+import sys
 
 class Tack:
 
@@ -20,9 +21,7 @@ class Tack:
         self.settings()
         self.start()
         self.loop()
-
-        logging.info("Normal shutdown.")
-        sys.exit(0)
+        self.shutdown()
 
     def settings(self):
         self.interval = 1.0
@@ -49,6 +48,12 @@ class Tack:
     def add_trigger(self, trigger):
         self.triggers[trigger.id] = trigger
 
-    def shutdown(self, trigger):
+    def request_shutdown(self, trigger):
         logging.info("Shutdown requested by %s" % str(trigger))
         self.shutdown_requested = True
+
+    def shutdown(self):
+        for t in self.triggers.values():
+            t.shutdown()
+        logging.info("Normal shutdown.")
+        sys.exit(0)
