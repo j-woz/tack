@@ -17,12 +17,15 @@ class Tack:
 
         logging.info("Tack file: " + self.filename)
 
+        self.settings()
         self.start()
         self.loop()
 
         logging.info("Normal shutdown.")
         sys.exit(0)
 
+    def settings(self):
+        self.interval = 1.0
 
     def start(self):
         with open(self.filename, "r") as f:
@@ -35,11 +38,16 @@ class Tack:
         return result
 
     def loop(self):
+        from time import sleep
         while True:
             for t in self.triggers.values():
                 t.poll()
                 if self.shutdown_requested:
                     self.shutdown()
+            sleep(self.interval)
+
+    def add_trigger(self, trigger):
+        self.triggers[trigger.id] = trigger
 
     def shutdown(self, trigger):
         logging.info("Shutdown requested by %s" % str(trigger))

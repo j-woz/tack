@@ -24,7 +24,9 @@ class TriggerFactory:
             sys.exit(1)
 
         T = self.types[t]
-        return T(self.tack, kwargs)
+        result = T(self.tack, kwargs)
+        self.tack.add_trigger(result)
+        return result
 
 class Trigger:
 
@@ -42,6 +44,9 @@ class Trigger:
 
     def __str__(self):
         return "%s <%i>" % (self.name, self.id)
+
+    def poll(self):
+        logging.info("Default poll(): %s" % str(self))
 
 class TimerTrigger(Trigger):
     def __init__(self, tack, args):

@@ -1,5 +1,5 @@
 
-from tack.triggers import TriggerFactory
+from tack.Triggers import TriggerFactory
 
 tf = TriggerFactory(tack)
 
