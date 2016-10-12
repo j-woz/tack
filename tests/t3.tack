@@ -1,0 +1,11 @@
+
+from tack.Triggers import TriggerFactory
+
+tf = TriggerFactory(tack)
+
+def t3_f(trigger, status):
+    print("t3 " + status)
+
+tf.new(name="go1", kind="globus", handler=t3_f,
+       user="wozniak", token="ENV",
+       task="6fce9664-8b3c-11e6-b03e-22000b92c261")

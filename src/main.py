@@ -1,7 +1,5 @@
 
 import sys
-from tack.setup import command
+import tack.setup
 
-command(sys.argv)
-
-
+tack.setup.command(sys.argv)

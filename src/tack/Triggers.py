@@ -35,6 +35,9 @@ class TriggerFactory:
 class Trigger:
 
     def __init__(self, tack, args, kind="SUPER"):
+        self.constructor(tack, args, kind)
+
+    def constructor(self, tack, args, kind):
         self.tack = tack
         self.id = self.tack.make_id()
         self.kind = kind
@@ -77,7 +80,7 @@ class Trigger:
 class TimerTrigger(Trigger):
 
     def __init__(self, tack, args):
-        super().__init__(tack, args, kind="timer")
+        self.constructor(tack, args, kind="timer")
         self.interval = self.key(args, "interval", 0)
         logging.info("New TimerTrigger \"%s\" (%0.3fs)" % \
                      (self.name, self.interval))
@@ -93,11 +96,11 @@ class TimerTrigger(Trigger):
             last_poll = t
 
 import threading
-from queue import Queue, Empty
+from Queue import Queue, Empty
 
 class ProcessTrigger(Trigger):
     def __init__(self, tack, args):
-        super().__init__(tack, args, kind="process")
+        self.constructor(tack, args, kind="process")
         self.command = args["command"]
         logging.info("New ProcessTrigger \"%s\" <%i> (%s)" %
                      (self.name, self.id, self.command))
@@ -127,7 +130,7 @@ class ProcessTrigger(Trigger):
 
 class GlobusTrigger(Trigger):
     def __init__(self, tack, args):
-        super().__init__(tack, args, kind="globus")
+        self.constructor(tack, args, kind="globus")
         self.user  = self.key(args, "user")
         self.token = self.key(args, "token")
         self.task  = self.key(args, "task")
@@ -150,7 +153,7 @@ class GlobusTrigger(Trigger):
     def run(self):
         self.debug("thread for <%i>: %s" % (self.id, self.task))
         from globusonline.transfer.api_client \
-            import Transfer, create_client_from_args
+            import TransferAPIClient
         token = self.get_token()
         api = TransferAPIClient(self.user, goauth=token)
 
@@ -164,8 +167,9 @@ class GlobusTrigger(Trigger):
         self.debug("Globus: done " + status)
         self.q.put(status)
 
-    def get_token():
+    def get_token(self):
         if self.token == "ENV":
+            import os
             v = os.getenv("TOKEN")
             if v == None:
                 print("Globus token environment variable TOKEN is unset!")
