@@ -10,11 +10,12 @@ defaultDefault = object()
 class TriggerFactory:
     def __init__(self, tack):
         self.tack = tack
-        self.kinds = { "timer":TimerTrigger, "process":ProcessTrigger }
+        self.kinds = { "timer":TimerTrigger,
+                       "process":ProcessTrigger,
+                       "globus":GlobusTrigger
+                     }
 
     def new(self, **kwargs):
-
-        print(kwargs)
 
         try:
             t = kwargs["kind"]
@@ -33,16 +34,12 @@ class TriggerFactory:
 
 class Trigger:
 
-    def __init__(self, tack, args):
+    def __init__(self, tack, args, kind="SUPER"):
         self.tack = tack
         self.id = self.tack.make_id()
-        self.kind = "SUPER"
+        self.kind = kind
 
-        try:
-            self.name = args["name"]
-        except KeyError:
-            logging.critical("Given trigger with no name!")
-            sys.exit(1)
+        self.name = self.key(args, "name")
 
         logging.info("New Trigger: %s" % str(self))
 
@@ -55,8 +52,8 @@ class Trigger:
             result = d[k]
         except KeyError:
             if default is defaultDefault:
-                logging.critical("Given %s trigger with no %s!" %
-                                 (kind, k))
+                logging.critical("Given trigger kind=%s with no %s!" %
+                                 (self.kind, k))
                 sys.exit(1)
             else:
                 return default
@@ -80,7 +77,7 @@ class Trigger:
 class TimerTrigger(Trigger):
 
     def __init__(self, tack, args):
-        super().__init__(tack, args)
+        super().__init__(tack, args, kind="timer")
         self.interval = self.key(args, "interval", 0)
         logging.info("New TimerTrigger \"%s\" (%0.3fs)" % \
                      (self.name, self.interval))
@@ -100,19 +97,18 @@ from queue import Queue, Empty
 
 class ProcessTrigger(Trigger):
     def __init__(self, tack, args):
-        super().__init__(tack, args)
+        super().__init__(tack, args, kind="process")
         self.command = args["command"]
         logging.info("New ProcessTrigger \"%s\" <%i> (%s)" %
                      (self.name, self.id, self.command))
         self.handler = self.key(args, "handler")
-        self.q_down = Queue()
-        self.q_up   = Queue()
+        self.q = Queue()
         threading.Thread(target=self.run).start()
 
     def poll(self):
         self.debug("poll()")
         try:
-            returncode = self.q_up.get_nowait()
+            returncode = self.q.get_nowait()
         except Empty:
             return
         self.debug("returncode: " + str(returncode))
@@ -127,4 +123,55 @@ class ProcessTrigger(Trigger):
         tokens = self.command.split()
         cp = subprocess.run(tokens)
         self.debug("run(): done")
-        self.q_up.put(cp.returncode)
+        self.q.put(cp.returncode)
+
+class GlobusTrigger(Trigger):
+    def __init__(self, tack, args):
+        super().__init__(tack, args, kind="globus")
+        self.user  = self.key(args, "user")
+        self.token = self.key(args, "token")
+        self.task  = self.key(args, "task")
+        logging.info("New GlobusTrigger \"%s\" <%i> (%s)" %
+                     (self.name, self.id, self.task))
+        self.handler = self.key(args, "handler")
+        self.q = Queue()
+        threading.Thread(target=self.run).start()
+
+    def poll(self):
+        self.debug("poll()")
+        try:
+            status = self.q.get_nowait()
+        except Empty:
+            return
+        self.debug("status: " + status)
+        self.handler(self, status)
+        self.tack.remove(self)
+
+    def run(self):
+        self.debug("thread for <%i>: %s" % (self.id, self.task))
+        from globusonline.transfer.api_client \
+            import Transfer, create_client_from_args
+        token = self.get_token()
+        api = TransferAPIClient(self.user, goauth=token)
+
+        while True:
+            code, reason, data = api.task(self.task, fields="status")
+            status = data["status"]
+            print(status)
+            if status in ("SUCCEEDED", "FAILED"):
+                break
+
+        self.debug("Globus: done " + status)
+        self.q.put(status)
+
+    def get_token():
+        if self.token == "ENV":
+            v = os.getenv("TOKEN")
+            if v == None:
+                print("Globus token environment variable TOKEN is unset!")
+                sys.exit(1)
+            else:
+                result = v
+        else:
+            result = self.token
+        return result
