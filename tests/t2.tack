@@ -1,0 +1,14 @@
+
+from tack.Triggers import TriggerFactory
+
+tf = TriggerFactory(tack)
+
+def t1_f(trigger, clock):
+    print(clock)
+
+def t2_f(trigger, returncode):#
+    print("sleep completed: " + str(returncode))
+
+# tf.new(name="timer1", kind="timer", handler=t1_f)
+
+tf.new(name="sh1", kind="process", handler=t2_f, command="sleep 2")

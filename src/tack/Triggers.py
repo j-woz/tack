@@ -5,6 +5,8 @@ import logging
 import sys
 import time
 
+defaultDefault = object()
+
 class TriggerFactory:
     def __init__(self, tack):
         self.tack = tack
@@ -26,7 +28,7 @@ class TriggerFactory:
 
         T = self.kinds[t]
         result = T(self.tack, kwargs)
-        self.tack.add_trigger(result)
+        self.tack.add(result)
         return result
 
 class Trigger:
@@ -46,8 +48,6 @@ class Trigger:
 
     def __str__(self):
         return "%s <%i>" % (self.name, self.id)
-
-    defaultDefault = object()
 
     # d: a dictionary ; k: the key ; default: optional default value
     def key(self, d, k, default=defaultDefault):
@@ -95,21 +95,36 @@ class TimerTrigger(Trigger):
             self.handler(self, t)
             last_poll = t
 
+import threading
+from queue import Queue, Empty
+
 class ProcessTrigger(Trigger):
     def __init__(self, tack, args):
         super().__init__(tack, args)
         self.command = args["command"]
-        logging.info("New TimerTrigger \"%s\" (%s)" % (self.name, self.command))
-        try:
-            self.handler = args["handler"]
-        except KeyError:
-            logging.critical("Given process trigger with no handler!")
-            sys.exit(1)
+        logging.info("New ProcessTrigger \"%s\" <%i> (%s)" %
+                     (self.name, self.id, self.command))
+        self.handler = self.key(args, "handler")
+        self.q_down = Queue()
+        self.q_up   = Queue()
+        threading.Thread(target=self.run).start()
 
     def poll(self):
         self.debug("poll()")
-        t = time.time()
-        if t - self.last_poll > self.interval:
-            self.debug("Calling handler")
-            self.handler(self, t)
-            last_poll = t
+        try:
+            returncode = self.q_up.get_nowait()
+        except Empty:
+            return
+        self.debug("returncode: " + str(returncode))
+        self.handler(self, returncode)
+        self.tack.remove(self)
+
+    def run(self):
+        self.debug("process thread for <%i>: %s" % (self.id, self.command))
+        # from time import sleep
+        # time.sleep(2)
+        import subprocess
+        tokens = self.command.split()
+        cp = subprocess.run(tokens)
+        self.debug("run(): done")
+        self.q_up.put(cp.returncode)
