@@ -9,4 +9,4 @@ def t1_f(trigger, clock):
     if random.randint(0,3) == 0:
         trigger.request_shutdown()
 
-tf.new(name="timer1", type="timer", handler=t1_f, interval=1)
+tf.new(name="timer1", kind="timer", handler=t1_f, interval=1)
