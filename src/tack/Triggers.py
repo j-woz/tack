@@ -69,12 +69,15 @@ class Trigger:
     def debug(self, message):
         logging.debug("%s: %s" % (str(self), message))
 
+    ''' Returns True if something happened, else False'''
     def poll(self):
         logging.info("Default poll(): %s" % str(self))
 
+    ''' Internal use only'''
     def request_shutdown(self):
         self.tack.request_shutdown(self)
 
+    ''' Tells this Trigger to shutdown'''
     def shutdown(self):
         logging.info("Default shutdown(): %s" % str(self))
 
@@ -95,6 +98,8 @@ class TimerTrigger(Trigger):
             self.debug("Calling handler")
             self.handler(self, t)
             last_poll = t
+            return True
+        return False
 
 import threading
 from Queue import Queue, Empty
@@ -115,10 +120,11 @@ class ProcessTrigger(Trigger):
         try:
             returncode = self.q_up.get_nowait()
         except Empty:
-            return
+            return False
         self.debug("returncode: " + str(returncode))
         self.handler(self, returncode)
         self.tack.remove(self)
+        return True
 
     def run(self):
         self.debug("process thread for <%i>: %s" %
@@ -149,7 +155,6 @@ class ProcessTrigger(Trigger):
         self.q_up.put(process.returncode)
 
     def shutdown(self):
-        # print("subprocess is running: normal shutdown is impossible!")
         self.q_down.put("TERMINATE")
         message = self.q_up.get()
         self.debug("returncode: " + str(message))
@@ -171,10 +176,11 @@ class GlobusTrigger(Trigger):
         try:
             status = self.q.get_nowait()
         except Empty:
-            return
+            return False
         self.debug("status: " + status)
         self.handler(self, status)
         self.tack.remove(self)
+        return True
 
     def run(self):
         self.debug("thread for <%i>: %s" % (self.id, self.task))
@@ -212,6 +218,7 @@ class ReaderTrigger(Trigger):
         self.constructor(tack, args, kind="reader")
         self.filename = self.key(args, "filename")
         self.eof      = self.key(args, "eof")
+        print ("eof: " + self.eof)
         self.pattern  = self.key(args, "pattern", default=None)
         self.eof_obj  = object()
 
@@ -220,40 +227,53 @@ class ReaderTrigger(Trigger):
         logging.info("New ReaderTrigger \"%s\" <%i> (%s)" %
                      (self.name, self.id, self.filename))
         self.handler = self.key(args, "handler")
-        self.q = Queue()
+        self.q_up   = Queue()
+        self.q_down = Queue()
         threading.Thread(target=self.run).start()
 
     def poll(self):
         self.debug("poll()")
         try:
-            line = self.q.get_nowait()
+            line = self.q_up.get_nowait()
         except Empty:
-            return
+            return False
         if (not line is self.eof_obj):
             self.debug("line: " + line)
             self.handler(self, line)
         else:
             self.debug("found EOF: " + self.eof)
             self.tack.remove(self)
+        return True
 
     def run(self):
-        self.debug("thread for <%i>: %s" % (self.id, self.filename))
+        self.debug("thread for %s" % self.filename)
         with open(self.filename, "r") as f:
             delay_max = 1.0
-            delay_min = 0.1
+            delay_min = 0.0
             delay = delay_min
             while True:
-                line = f.readline()
-                if len(line) == 0:
-                    time.sleep(delay)
-                    delay = delay_incr(delay, delay_max)
-                if (not self.pattern) or self.pc.match(line):
-                    self.q.put(line)
+                line = f.readline().strip()
+                if len(line) > 0:
                     delay = delay_min
-                elif line == self.eof:
-                    break
-        self.debug("Reader: done: " + filename)
-        self.q.put(self.eof_obj)
+                    if line == self.eof:
+                        print("found eof")
+                        break
+                    if (not self.pattern) or self.pc.match(line):
+                        self.q_up.put(line)
+                else:
+                    delay = delay_incr(delay, delay_max)
+                try:
+                    message = self.q_down.get(timeout=delay)
+                    assert(message == "TERMINATE")
+                    return
+                except Empty:
+                    pass
+        self.debug("Reader: done: " + self.filename)
+        self.q_up.put(self.eof_obj)
+
+    def shutdown(self):
+        print("putting terminate")
+        self.q_down.put("TERMINATE")
 
 def delay_incr(delay_now, delay_max):
     if delay_now < 1.0:
