@@ -10,9 +10,10 @@ defaultDefault = object()
 class TriggerFactory:
     def __init__(self, tack):
         self.tack = tack
-        self.kinds = { "timer":TimerTrigger,
-                       "process":ProcessTrigger,
-                       "globus":GlobusTrigger
+        self.kinds = { "timer"   : TimerTrigger,
+                       "process" : ProcessTrigger,
+                       "globus"  : GlobusTrigger,
+                       "reader"  : ReaderTrigger
                      }
 
     def new(self, **kwargs):
@@ -105,13 +106,14 @@ class ProcessTrigger(Trigger):
         logging.info("New ProcessTrigger \"%s\" <%i> (%s)" %
                      (self.name, self.id, self.command))
         self.handler = self.key(args, "handler")
-        self.q = Queue()
+        self.q_down = Queue()
+        self.q_up   = Queue()
         threading.Thread(target=self.run).start()
 
     def poll(self):
         self.debug("poll()")
         try:
-            returncode = self.q.get_nowait()
+            returncode = self.q_up.get_nowait()
         except Empty:
             return
         self.debug("returncode: " + str(returncode))
@@ -119,14 +121,38 @@ class ProcessTrigger(Trigger):
         self.tack.remove(self)
 
     def run(self):
-        self.debug("process thread for <%i>: %s" % (self.id, self.command))
-        # from time import sleep
-        # time.sleep(2)
+        self.debug("process thread for <%i>: %s" %
+                   (self.id, self.command))
         import subprocess
         tokens = self.command.split()
-        cp = subprocess.run(tokens)
+        # cp = subprocess.call(tokens)
+        process = subprocess.Popen(tokens)
+        self.debug("pid is %i for: %s" % (process.pid, self.command))
+        while True:
+            p = process.poll()
+            if not p is None:
+                break
+            try:
+                message = self.q_down.get(timeout=1)
+            except Empty:
+                continue
+            assert(message == "TERMINATE")
+            self.info("terminating pid: %i: %s" %
+                      (process.pid, self.command))
+            try:
+                process.terminate()
+            except OSError:
+                self.info("process <%i> already exited.")
+            process.poll()
+            break
         self.debug("run(): done")
-        self.q.put(cp.returncode)
+        self.q_up.put(process.returncode)
+
+    def shutdown(self):
+        # print("subprocess is running: normal shutdown is impossible!")
+        self.q_down.put("TERMINATE")
+        message = self.q_up.get()
+        self.debug("returncode: " + str(message))
 
 class GlobusTrigger(Trigger):
     def __init__(self, tack, args):
@@ -179,3 +205,61 @@ class GlobusTrigger(Trigger):
         else:
             result = self.token
         return result
+
+class ReaderTrigger(Trigger):
+
+    def __init__(self, tack, args):
+        self.constructor(tack, args, kind="reader")
+        self.filename = self.key(args, "filename")
+        self.eof      = self.key(args, "eof")
+        self.pattern  = self.key(args, "pattern", default=None)
+        self.eof_obj  = object()
+
+        if self.pattern:
+            self.pc = re.compile(self.pattern)
+        logging.info("New ReaderTrigger \"%s\" <%i> (%s)" %
+                     (self.name, self.id, self.filename))
+        self.handler = self.key(args, "handler")
+        self.q = Queue()
+        threading.Thread(target=self.run).start()
+
+    def poll(self):
+        self.debug("poll()")
+        try:
+            line = self.q.get_nowait()
+        except Empty:
+            return
+        if (not line is self.eof_obj):
+            self.debug("line: " + line)
+            self.handler(self, line)
+        else:
+            self.debug("found EOF: " + self.eof)
+            self.tack.remove(self)
+
+    def run(self):
+        self.debug("thread for <%i>: %s" % (self.id, self.filename))
+        with open(self.filename, "r") as f:
+            delay_max = 1.0
+            delay_min = 0.1
+            delay = delay_min
+            while True:
+                line = f.readline()
+                if len(line) == 0:
+                    time.sleep(delay)
+                    delay = delay_incr(delay, delay_max)
+                if (not self.pattern) or self.pc.match(line):
+                    self.q.put(line)
+                    delay = delay_min
+                elif line == self.eof:
+                    break
+        self.debug("Reader: done: " + filename)
+        self.q.put(self.eof_obj)
+
+def delay_incr(delay_now, delay_max):
+    if delay_now < 1.0:
+        result = delay_now + 0.1
+    else:
+        result = delay_now + 1.0
+        if result > delay_max:
+            result = delay_max
+    return result

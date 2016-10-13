@@ -19,12 +19,17 @@ class Tack:
         # Triggers to be removed after poll iterations
         self.removals = []
         self.shutdown_requested = False
+        self.interrupted = False
 
         logging.info("Tack file: " + self.filename)
 
         self.settings()
         self.start()
-        self.loop()
+        try:
+            self.loop()
+        except KeyboardInterrupt:
+            print(" tack: handling keyboard interrupt")
+            self.interrupted = True
         self.shutdown()
 
     def settings(self):
@@ -68,5 +73,7 @@ class Tack:
     def shutdown(self):
         for t in self.triggers.values():
             t.shutdown()
-        logging.info("Normal shutdown.")
+        message = "Normal shutdown." if not self.interrupted else \
+                  "Normal shutdown after interrupt."
+        logging.info(message)
         sys.exit(0)
