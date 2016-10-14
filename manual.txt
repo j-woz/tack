@@ -1,0 +1,69 @@
+
+////
+Tack guide, asciidoc format
+http://jmjwozniak.github.io/tack
+////
+
+:toc:
+:numbered:
+
+////
+Settings:
+////
+:miscellaneous.newline: \n
+
+= Tack Guide
+October 2016
+
+== Concept
+
+The conceptual idea is to easily express a list of event conditions and corresponding actions:
+
+[align="center",width="30%",grid="none",frame="none"]
+|============================
+| _condition~1~_ | { _action~1~_ }
+| _condition~2~_ | { _action~2~_ }
+| ...            | 
+| _condition~n~_ | { _action~n~_ }
+|============================
+
+The conditions can be: 
+
+* Globus transfer status changes
+* Timer events
+* Log file appends
+* Process completion
+* [red]#&#x1F6A7;# PBS and Cobalt job status changes
+* [red]#&#x1F6A7;# File creation and modification (via inotify)
+
+The actions are fragments of Python code.
+
+== Application to SC16 demo workflow
+
+At ALCF, we need to:
+
+* Respond to log file appends
+* Launch Globus transfer reliably to NCSA
+
+At NCSA, we need to:
+
+* Respond to Globus transfer completion
+* Launch computation reliably
+
+The conversion of the existing scripts to Tack should simplify and harden the workflow. 
+
+== Implementation
+
+* Pure Python 2.7
+* Uses the Globus Python REST API
+* Uses Threads and Queues for multiplexing event monitors
+
+////
+[grid="none",frame="none"]
+////
+
+////
+Local Variables:
+mode: doc
+End:
+////
