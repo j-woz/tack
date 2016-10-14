@@ -1,0 +1,10 @@
+
+from tack.Triggers import TriggerFactory
+
+tf = TriggerFactory(tack)
+
+def t4_f(trigger, line):
+    print("t3 " + line)
+
+tf.new(name="r1", kind="reader", handler=t4_f,
+       filename="tests/data4.txt", eof="EOF")
