@@ -13,6 +13,7 @@ Settings:
 :miscellaneous.newline: \n
 
 = Tack Guide
+Justin M. Wozniak <wozniak@mcs.anl.gov>
 October 2016
 
 == Concept
@@ -57,6 +58,7 @@ The conversion of the existing scripts to Tack should simplify and harden the wo
 * Pure Python 2.7
 * Uses the Globus Python REST API
 * Uses Threads and Queues for multiplexing event monitors
+* The code is hosted at: https://github.com/jmjwozniak/tack
 
 ////
 [grid="none",frame="none"]
